@@ -8,6 +8,7 @@ import argparse
 import asyncio
 import atexit
 import json
+import os
 from inspect import Parameter, Signature
 from typing import Any, Dict, Optional
 
@@ -17,6 +18,7 @@ from app.logger import logger
 from app.tool.base import BaseTool
 from app.tool.bash import Bash
 from app.tool.browser_use_tool import BrowserUseTool
+from app.tool.config_tool import ConfigTool
 from app.tool.str_replace_editor import StrReplaceEditor
 from app.tool.terminate import Terminate
 
@@ -33,6 +35,15 @@ class MCPServer:
         self.tools["browser"] = BrowserUseTool()
         self.tools["editor"] = StrReplaceEditor()
         self.tools["terminate"] = Terminate()
+
+        # 設定操作ツールを初期化
+        self.tools["config"] = ConfigTool()
+
+        # Node.js連携が有効かどうかをチェック
+        if "OPENMANUS_MCP_CONFIG_ENABLED" in os.environ:
+            if hasattr(self.tools["config"], "_set_nodejs_bridge"):
+                self.tools["config"]._set_nodejs_bridge(True)
+                logger.info("設定操作ツールのNode.js連携を有効化しました")
 
     def register_tool(self, tool: BaseTool, method_name: Optional[str] = None) -> None:
         """Register a tool with parameter validation and documentation."""
@@ -60,8 +71,10 @@ class MCPServer:
         tool_method.__signature__ = self._build_signature(tool_function)
 
         # Store parameter schema (important for tools that access it programmatically)
-        param_props = tool_function.get("parameters", {}).get("properties", {})
-        required_params = tool_function.get("parameters", {}).get("required", [])
+        parameters = tool_function.get("parameters", {})
+        param_props = parameters.get("properties", {}) if isinstance(parameters, dict) else {}
+        required_params = parameters.get("required", []) if isinstance(parameters, dict) else []
+
         tool_method._parameter_schema = {
             param_name: {
                 "description": param_details.get("description", ""),
@@ -78,8 +91,9 @@ class MCPServer:
     def _build_docstring(self, tool_function: dict) -> str:
         """Build a formatted docstring from tool function metadata."""
         description = tool_function.get("description", "")
-        param_props = tool_function.get("parameters", {}).get("properties", {})
-        required_params = tool_function.get("parameters", {}).get("required", [])
+        parameters = tool_function.get("parameters", {})
+        param_props = parameters.get("properties", {}) if isinstance(parameters, dict) else {}
+        required_params = parameters.get("required", []) if isinstance(parameters, dict) else []
 
         # Build docstring (match original format)
         docstring = description
@@ -99,8 +113,9 @@ class MCPServer:
 
     def _build_signature(self, tool_function: dict) -> Signature:
         """Build a function signature from tool function metadata."""
-        param_props = tool_function.get("parameters", {}).get("properties", {})
-        required_params = tool_function.get("parameters", {}).get("required", [])
+        parameters = tool_function.get("parameters", {})
+        param_props = parameters.get("properties", {}) if isinstance(parameters, dict) else {}
+        required_params = parameters.get("required", []) if isinstance(parameters, dict) else []
 
         parameters = []
 

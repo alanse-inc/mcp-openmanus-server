@@ -156,92 +156,181 @@ class Config:
 
     def _load_config(self) -> dict:
         config_path = self._get_config_path()
-        with config_path.open("rb") as f:
-            return tomllib.load(f)
-
-    def _load_initial_config(self):
-        raw_config = self._load_config()
-        base_llm = raw_config.get("llm", {})
-        llm_overrides = {
-            k: v for k, v in raw_config.get("llm", {}).items() if isinstance(v, dict)
-        }
-
-        default_settings = {
-            "model": base_llm.get("model"),
-            "base_url": base_llm.get("base_url"),
-            "api_key": base_llm.get("api_key"),
-            "max_tokens": base_llm.get("max_tokens", 4096),
-            "max_input_tokens": base_llm.get("max_input_tokens"),
-            "temperature": base_llm.get("temperature", 1.0),
-            "api_type": base_llm.get("api_type", ""),
-            "api_version": base_llm.get("api_version", ""),
-        }
-
-        # handle browser config.
-        browser_config = raw_config.get("browser", {})
-        browser_settings = None
-
-        if browser_config:
-            # handle proxy settings.
-            proxy_config = browser_config.get("proxy", {})
-            proxy_settings = None
-
-            if proxy_config and proxy_config.get("server"):
-                proxy_settings = ProxySettings(
-                    **{
-                        k: v
-                        for k, v in proxy_config.items()
-                        if k in ["server", "username", "password"] and v
-                    }
-                )
-
-            # filter valid browser config parameters.
-            valid_browser_params = {
-                k: v
-                for k, v in browser_config.items()
-                if k in BrowserSettings.__annotations__ and v is not None
+        try:
+            with config_path.open("rb") as f:
+                return tomllib.load(f)
+        except tomllib.TOMLDecodeError as e:
+            # TOMLパースエラーが発生した場合、詳細なエラー情報を出力
+            print(f"設定ファイルのパースエラー（{config_path}）: {e}")
+            print("デフォルト設定を使用します")
+            # 最小限の設定を返す
+            return {
+                "llm": {
+                    "model": "gpt-4o",
+                    "base_url": "https://api.openai.com/v1",
+                    "api_key": "",
+                    "max_tokens": 4096,
+                    "temperature": 0.7,
+                    "api_type": "openai",
+                    "api_version": ""
+                },
+                "browser": {
+                    "headless": True,
+                    "disable_security": True,
+                    "timeout": 30000,
+                    "retry_count": 3,
+                    "retry_delay": 1000
+                },
+                "search": {
+                    "engine": "Google",
+                    "engine_url": "https://www.google.com",
+                    "lang": "ja",
+                    "country": "jp"
+                },
+                "mcp": {
+                    "server_reference": "app.mcp.server"
+                }
             }
 
-            # if there is proxy settings, add it to the parameters.
-            if proxy_settings:
-                valid_browser_params["proxy"] = proxy_settings
+    def _load_initial_config(self):
+        try:
+            raw_config = self._load_config()
+            base_llm = raw_config.get("llm", {})
+            llm_overrides = {
+                k: v for k, v in raw_config.get("llm", {}).items() if isinstance(v, dict)
+            }
 
-            # only create BrowserSettings when there are valid parameters.
-            if valid_browser_params:
-                browser_settings = BrowserSettings(**valid_browser_params)
+            # LLM設定に必須項目がない場合のデフォルト値
+            default_settings = {
+                "model": base_llm.get("model", "gpt-4o"),
+                "base_url": base_llm.get("base_url", "https://api.openai.com/v1"),
+                "api_key": base_llm.get("api_key", ""),
+                "max_tokens": base_llm.get("max_tokens", 4096),
+                "max_input_tokens": base_llm.get("max_input_tokens"),
+                "temperature": base_llm.get("temperature", 1.0),
+                "api_type": base_llm.get("api_type", "openai"),
+                "api_version": base_llm.get("api_version", ""),
+            }
 
-        search_config = raw_config.get("search", {})
-        search_settings = None
-        if search_config:
-            search_settings = SearchSettings(**search_config)
-        sandbox_config = raw_config.get("sandbox", {})
-        if sandbox_config:
-            sandbox_settings = SandboxSettings(**sandbox_config)
-        else:
-            sandbox_settings = SandboxSettings()
+            # handle browser config.
+            browser_config = raw_config.get("browser", {})
+            browser_settings = None
 
-        mcp_config = raw_config.get("mcp", {})
-        mcp_settings = None
-        if mcp_config:
-            mcp_settings = MCPSettings(**mcp_config)
-        else:
-            mcp_settings = MCPSettings()
+            if browser_config:
+                # handle proxy settings.
+                proxy_config = browser_config.get("proxy", {})
+                proxy_settings = None
 
-        config_dict = {
-            "llm": {
-                "default": default_settings,
-                **{
-                    name: {**default_settings, **override_config}
-                    for name, override_config in llm_overrides.items()
+                if proxy_config and proxy_config.get("server"):
+                    proxy_settings = ProxySettings(
+                        **{
+                            k: v
+                            for k, v in proxy_config.items()
+                            if k in ["server", "username", "password"] and v
+                        }
+                    )
+
+                # filter valid browser config parameters.
+                valid_browser_params = {
+                    k: v
+                    for k, v in browser_config.items()
+                    if k in BrowserSettings.__annotations__ and v is not None
+                }
+
+                # if there is proxy settings, add it to the parameters.
+                if proxy_settings:
+                    valid_browser_params["proxy"] = proxy_settings
+
+                # only create BrowserSettings when there are valid parameters.
+                if valid_browser_params:
+                    try:
+                        browser_settings = BrowserSettings(**valid_browser_params)
+                    except Exception as e:
+                        print(f"ブラウザ設定のパースエラー: {e}")
+                        browser_settings = BrowserSettings(
+                            headless=True,
+                            disable_security=True,
+                            extra_chromium_args=[]
+                        )
+
+            search_config = raw_config.get("search", {})
+            search_settings = None
+            if search_config:
+                try:
+                    search_settings = SearchSettings(**search_config)
+                except Exception as e:
+                    print(f"検索設定のパースエラー: {e}")
+                    search_settings = SearchSettings(
+                        engine="Google",
+                        engine_url="https://www.google.com",
+                        lang="ja",
+                        country="jp"
+                    )
+
+            sandbox_config = raw_config.get("sandbox", {})
+            try:
+                if sandbox_config:
+                    sandbox_settings = SandboxSettings(**sandbox_config)
+                else:
+                    sandbox_settings = SandboxSettings()
+            except Exception as e:
+                print(f"サンドボックス設定のパースエラー: {e}")
+                sandbox_settings = SandboxSettings()
+
+            mcp_config = raw_config.get("mcp", {})
+            try:
+                if mcp_config:
+                    mcp_settings = MCPSettings(**mcp_config)
+                else:
+                    mcp_settings = MCPSettings()
+            except Exception as e:
+                print(f"MCP設定のパースエラー: {e}")
+                mcp_settings = MCPSettings()
+
+            config_dict = {
+                "llm": {
+                    "default": default_settings,
+                    **{
+                        name: {**default_settings, **override_config}
+                        for name, override_config in llm_overrides.items()
+                    },
                 },
-            },
-            "sandbox": sandbox_settings,
-            "browser_config": browser_settings,
-            "search_config": search_settings,
-            "mcp_config": mcp_settings,
-        }
+                "sandbox": sandbox_settings,
+                "browser_config": browser_settings,
+                "search_config": search_settings,
+                "mcp_config": mcp_settings,
+            }
 
-        self._config = AppConfig(**config_dict)
+            try:
+                self._config = AppConfig(**config_dict)
+            except Exception as e:
+                print(f"設定の適用エラー: {e}")
+                # 最小限の設定で AppConfig を作成
+                self._config = AppConfig(
+                    llm={"default": default_settings},
+                    sandbox=sandbox_settings,
+                    mcp_config=mcp_settings
+                )
+        except Exception as e:
+            print(f"設定の初期化中にエラーが発生しました: {e}")
+            # 最小限の設定でフォールバック
+            default_llm_settings = LLMSettings(
+                model="gpt-4o",
+                base_url="https://api.openai.com/v1",
+                api_key="",
+                max_tokens=4096,
+                temperature=0.7,
+                api_type="openai",
+                api_version=""
+            )
+            default_mcp_settings = MCPSettings()
+            default_sandbox_settings = SandboxSettings()
+
+            self._config = AppConfig(
+                llm={"default": default_llm_settings},
+                sandbox=default_sandbox_settings,
+                mcp_config=default_mcp_settings
+            )
 
     @property
     def llm(self) -> Dict[str, LLMSettings]:
@@ -273,6 +362,20 @@ class Config:
     def root_path(self) -> Path:
         """Get the root path of the application"""
         return PROJECT_ROOT
+
+    def reload_config(self):
+        """設定ファイルを再読み込みして、実行中のアプリケーションに適用します。"""
+        with self._lock:
+            try:
+                old_config = self._config
+                self._load_initial_config()
+                print("設定を再読み込みしました")
+                return True
+            except Exception as e:
+                print(f"設定の再読み込み中にエラーが発生しました: {e}")
+                # エラーが発生した場合は以前の設定を保持
+                self._config = old_config
+                return False
 
 
 config = Config()
