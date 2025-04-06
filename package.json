@@ -1,0 +1,41 @@
+{
+  "name": "@alanse-inc/mcp-openmanus-server",
+  "version": "0.1.0",
+  "description": "OpenManus MCP Server - Run OpenManus via MCP",
+  "main": "run_mcp_server.js",
+  "type": "module",
+  "bin": {
+    "mcp-openmanus-server": "run_mcp_server.js",
+    "mcp-openmanus-local": "mcplocal.js",
+    "mcp-openmanus-uvx": "bin/run-uvx.js"
+  },
+  "scripts": {
+    "start": "node run_mcp_server.js",
+    "start:uvx": "node bin/run-uvx.js",
+    "start:uvx:local": "node bin/run-uvx.js local"
+  },
+  "dependencies": {
+    "@anaisbetts/mcpc": "^0.2.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alanse-inc/mcp-openmanus-server.git"
+  },
+  "keywords": [
+    "openmanus",
+    "mcp",
+    "agent",
+    "ai",
+    "claude",
+    "gpt"
+  ],
+  "author": "alanse-inc",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/alanse-inc/mcp-openmanus-server/issues"
+  },
+  "homepage": "https://github.com/alanse-inc/mcp-openmanus-server#readme"
+}
